@@ -9,14 +9,23 @@ USE_LM_STUDIO = os.getenv("USE_LM_STUDIO", "false").lower() == "true"
 LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://192.168.68.123:1234/v1")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "phi-4")
 
+# Prompt user for question
+print("=" * 60)
+print("AI Assistant")
+print("=" * 60)
+message = input("\nEnter your question: ").strip()
+
+if not message:
+    print("No question provided. Exiting.")
+    exit(0)
+
 if USE_LM_STUDIO:
     # Use LiteLLM with LM Studio's OpenAI-compatible endpoint
     from litellm import completion
     
-    print(f"Using LM Studio at {LM_STUDIO_URL}")
+    print(f"\nUsing LM Studio at {LM_STUDIO_URL}")
     print(f"Model: {LM_STUDIO_MODEL}")
-    
-    message = "I was born in 1979, what is my current age?"
+    print(f"\nProcessing your question...")
     
     response = completion(
         model=f"openai/{LM_STUDIO_MODEL}",
@@ -33,8 +42,8 @@ else:
     from strands import Agent
     from strands_tools import calculator, current_time
     
-    print("Using AWS Bedrock")
+    print("\nUsing AWS Bedrock")
+    print(f"\nProcessing your question...")
     
     agent = Agent(tools=[calculator, current_time])
-    message = "I was born in 1979, what is my current age?"
     agent(message)
