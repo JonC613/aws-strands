@@ -1,0 +1,8 @@
+# Runtime dependencies
+strands-agents
+strands-agents-tools
+litellm
+python-dotenv
+
+# Testing
+pytest
