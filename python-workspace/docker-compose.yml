@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:0.12.6
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      # Make Ollama listen on all interfaces
+      - OLLAMA_HOST=http://0.0.0.0:11434
+      # Tune these as needed
+      - OLLAMA_MAX_QUEUE=512
+      - OLLAMA_LOAD_TIMEOUT=5m0s
+      - OLLAMA_KEEP_ALIVE=5m0s
+      - OLLAMA_DEBUG=INFO
+      # If you need Intel GPU support, set OLLAMA_INTEL_GPU=true
+      - OLLAMA_INTEL_GPU=false
+    volumes:
+      # Persist models and storage across restarts
+      - ./ollama_models:/root/.ollama/models
+      - ./ollama_data:/root/.ollama/data
+    # GPU support via deploy/resources (Docker Compose v3.8+)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all    # use all GPUs, or set to 1, 2, etc.
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Notes:
+# - This compose file assumes your Docker host has NVIDIA Container Toolkit installed.
+# - For multiple GPUs you can change `count` under device_requests or control GPU visibility
+#   with CUDA_VISIBLE_DEVICES in the environment (or on the host before `docker compose up`).
