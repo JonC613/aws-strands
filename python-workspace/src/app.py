@@ -80,15 +80,36 @@ if prompt := st.chat_input("Ask me anything..."):
             if USE_OLLAMA:
                 # Import tools
                 from strands_tools import calculator, current_time
+                from strands_tools.tavily import tavily_search
+                import asyncio
                 
                 # Get callable functions
                 calculator_func = calculator.calculator
                 current_time_func = current_time.current_time
                 
+                # Create sync wrapper for async tavily_search
+                def tavily_search_sync(query: str, search_depth: str = "basic", max_results: int = 5, include_answer: bool = True) -> dict:
+                    """
+                    Synchronous wrapper for async tavily_search with enhanced parameters.
+                    
+                    Args:
+                        query: Search query string
+                        search_depth: "basic" (1 credit) or "advanced" (2 credits) - advanced provides better relevance
+                        max_results: Number of results to return (1-10 recommended)
+                        include_answer: Include AI-generated answer summary
+                    """
+                    return asyncio.run(tavily_search(
+                        query=query,
+                        search_depth=search_depth,
+                        max_results=max_results,
+                        include_answer=include_answer
+                    ))
+                
                 # Map of available tools
                 available_tools = {
                     "calculator": calculator_func,
-                    "current_time": current_time_func
+                    "current_time": current_time_func,
+                    "tavily_search": tavily_search_sync
                 }
                 
                 # Define tools in OpenAI format
@@ -119,6 +140,38 @@ if prompt := st.chat_input("Ask me anything..."):
                                 "type": "object",
                                 "properties": {},
                                 "required": []
+                            }
+                        }
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "tavily_search",
+                            "description": "Search the web for real-time, up-to-date information using Tavily's AI-optimized search engine. Use this for current events, recent news, live data, or any information that changes over time.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {
+                                        "type": "string",
+                                        "description": "The search query. Be specific and clear. Examples: 'latest SpaceX launch date', 'current Bitcoin price', 'recent AI breakthroughs 2025'"
+                                    },
+                                    "search_depth": {
+                                        "type": "string",
+                                        "enum": ["basic", "advanced"],
+                                        "description": "Search depth: 'basic' for quick results, 'advanced' for more thorough and relevant results. Default: 'basic'"
+                                    },
+                                    "max_results": {
+                                        "type": "integer",
+                                        "description": "Number of search results to return (1-10). More results = more context but longer processing. Default: 5",
+                                        "minimum": 1,
+                                        "maximum": 10
+                                    },
+                                    "include_answer": {
+                                        "type": "boolean",
+                                        "description": "Whether to include an AI-generated summary answer from Tavily. Recommended: true. Default: true"
+                                    }
+                                },
+                                "required": ["query"]
                             }
                         }
                     }
@@ -167,6 +220,40 @@ if prompt := st.chat_input("Ask me anything..."):
                                     try:
                                         if tool_name == "calculator":
                                             result = available_tools[tool_name](tool_args["expression"])
+                                        elif tool_name == "tavily_search":
+                                            # Extract optional parameters with defaults
+                                            search_depth = tool_args.get("search_depth", "basic")
+                                            max_results = tool_args.get("max_results", 5)
+                                            include_answer = tool_args.get("include_answer", True)
+                                            
+                                            result = available_tools[tool_name](
+                                                query=tool_args["query"],
+                                                search_depth=search_depth,
+                                                max_results=max_results,
+                                                include_answer=include_answer
+                                            )
+                                            
+                                            # Format for display
+                                            if isinstance(result, dict) and result.get("status") == "success":
+                                                formatted_parts = []
+                                                
+                                                # Include AI-generated answer if available
+                                                if include_answer and "answer" in result:
+                                                    formatted_parts.append(f"**AI Summary:** {result['answer']}\n")
+                                                
+                                                # Extract source content
+                                                content = result.get("content", [])
+                                                if content and isinstance(content, list):
+                                                    formatted_parts.append("**Sources:**")
+                                                    for idx, item in enumerate(content[:max_results], 1):
+                                                        if isinstance(item, dict):
+                                                            title = item.get("title", "No title")
+                                                            url = item.get("url", "")
+                                                            snippet = item.get("text", "")[:200]
+                                                            formatted_parts.append(f"{idx}. [{title}]({url})")
+                                                            formatted_parts.append(f"   {snippet}...")
+                                                    
+                                                    result = "\n".join(formatted_parts)
                                         else:
                                             result = available_tools[tool_name]()
                                         tool_result = str(result)
